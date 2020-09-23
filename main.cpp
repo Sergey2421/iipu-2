@@ -123,66 +123,7 @@ void printAtaSpecs(HANDLE diskHandle)
 	}
 }
 
-void printNVMeFeatures(HANDLE diskHandle)
-{
-	cout << "NVMe features: \n";
-	BOOL    result;
-	PVOID   buffer = NULL;
-	ULONG   bufferLength = 0;
-	ULONG   returnedLength = 0;
 
-	PSTORAGE_PROPERTY_QUERY query = NULL;
-	PSTORAGE_PROTOCOL_SPECIFIC_DATA protocolData = NULL;
-	PSTORAGE_PROTOCOL_DATA_DESCRIPTOR protocolDataDescr = NULL;
-
-
-	bufferLength = FIELD_OFFSET(STORAGE_PROPERTY_QUERY, AdditionalParameters) + sizeof(STORAGE_PROTOCOL_SPECIFIC_DATA) + NVME_MAX_LOG_SIZE;
-	buffer = new BYTE[bufferLength];
-
-	for (USHORT featureNumber = 1; featureNumber <= 131; featureNumber++)
-	{
-		if (featureNumber == 18)
-			featureNumber = 128;
-
-		ZeroMemory(buffer, bufferLength);
-
-		query = (PSTORAGE_PROPERTY_QUERY)buffer;
-		protocolDataDescr = (PSTORAGE_PROTOCOL_DATA_DESCRIPTOR)buffer;
-		protocolData = (PSTORAGE_PROTOCOL_SPECIFIC_DATA)query->AdditionalParameters;
-
-		query->PropertyId = StorageDeviceProtocolSpecificProperty;
-		query->QueryType = PropertyStandardQuery;
-
-		protocolData->ProtocolType = ProtocolTypeNvme;
-		protocolData->DataType = NVMeDataTypeFeature;
-		protocolData->ProtocolDataRequestValue = featureNumber;
-		protocolData->ProtocolDataRequestSubValue = 0;
-		protocolData->ProtocolDataOffset = 0;
-		protocolData->ProtocolDataLength = 0;
-
-		result = DeviceIoControl(diskHandle,
-			IOCTL_STORAGE_QUERY_PROPERTY,
-			buffer,
-			bufferLength,
-			buffer,
-			bufferLength,
-			&returnedLength,
-			NULL
-		);
-
-		if (!result || (returnedLength == 0)) {
-			continue;
-		}
-
-		if ((protocolDataDescr->Version != sizeof(STORAGE_PROTOCOL_DATA_DESCRIPTOR)) ||
-			(protocolDataDescr->Size != sizeof(STORAGE_PROTOCOL_DATA_DESCRIPTOR))) {
-			continue;
-		}
-		//if (protocolDataDescr->ProtocolSpecificData.FixedProtocolReturnData)
-		std::cout << " - " << (featureNumber <= 17 ? nvmeFeatures[featureNumber] : nvmeFeatures128[featureNumber - 128]) << '\n';
-
-	}
-}
 
 int main()
 {
@@ -220,8 +161,6 @@ int main()
 		std::cout << '\n';
 		if (diskDesc->BusType == 3 || diskDesc->BusType == 11)
 			printAtaSpecs(diskHandle);
-		if (diskDesc->BusType == _STORAGE_BUS_TYPE::BusTypeNvme)
-			printNVMeFeatures(diskHandle);
 
 		std::cout << "\n\n";
 		CloseHandle(diskHandle);
