@@ -17,38 +17,38 @@ void printDiskSize(HANDLE handle, int number)
 	double totalMemory = 0
 		, unusedMemory = 0
 		, usedMemory = 0;
-	DISK_GEOMETRY_EX diskGeometry;
-	DeviceIoControl(handle, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, NULL, 0, &diskGeometry, sizeof(diskGeometry), NULL, NULL);
-	totalMemory = (double)diskGeometry.DiskSize.QuadPart / (double)(1024 * 1024 * 1024);
+	DISK_GEOMETRY_EX diskGeometry;  // структура содержащая объем диска
+	DeviceIoControl(handle, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, NULL, 0, &diskGeometry, sizeof(diskGeometry), NULL, NULL);  // с помощью функции записываем размер диска
+	totalMemory = (double)diskGeometry.DiskSize.QuadPart / (double)(1024 * 1024 * 1024); // переводим в ГБ
 
-	DWORD logicalDrivesMask = GetLogicalDrives();
-	for (int i = 0; i < 26; i++)
+	DWORD logicalDrivesMask = GetLogicalDrives();  // получаем маску разделов дисков
+	for (int i = 0; i < 26; i++)        // идем по разделам дисков
 	{
-		if ((logicalDrivesMask >> i) & 1)
+		if ((logicalDrivesMask >> i) & 1)    // идем по разделам дисков
 		{
 			char* localBuf = new char[BUFSIZ];
 			char symbl = char(65 + i);
 			string pathHandle = "\\\\.\\", pathName = ":\\";
-			HANDLE logicalDriveHandle = CreateFileA((pathHandle + symbl + ":").c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
-			DeviceIoControl(logicalDriveHandle, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, sizeof(STORAGE_DEVICE_NUMBER), localBuf, BUFSIZ, NULL, (LPOVERLAPPED)NULL);
-			STORAGE_DEVICE_NUMBER* deviceNumber = (STORAGE_DEVICE_NUMBER*)localBuf;
-			if (number == deviceNumber->DeviceNumber)
+			HANDLE logicalDriveHandle = CreateFileA((pathHandle + symbl + ":").c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);   // получаем HANDLE раздела
+			DeviceIoControl(logicalDriveHandle, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, sizeof(STORAGE_DEVICE_NUMBER), localBuf, BUFSIZ, NULL, (LPOVERLAPPED)NULL);   // получаем информацию о разделе
+			STORAGE_DEVICE_NUMBER* deviceNumber = (STORAGE_DEVICE_NUMBER*)localBuf;  // записываем ее
+			if (number == deviceNumber->DeviceNumber)  // смотрим какому диску принадлежит раздел
 			{
 				ULARGE_INTEGER freeSpace;
-				GetDiskFreeSpaceExA((symbl + pathName).c_str(), 0, 0, &freeSpace);
-				unusedMemory += (double)freeSpace.QuadPart;
+				GetDiskFreeSpaceExA((symbl + pathName).c_str(), 0, 0, &freeSpace); // получаем объем свободной памяти раздела
+				unusedMemory += (double)freeSpace.QuadPart; // плюсуем
 			}
-			CloseHandle(logicalDriveHandle);
+			CloseHandle(logicalDriveHandle); 
 		}
 	}
-	unusedMemory /= (double)1024 * 1024 * 1024;
-	usedMemory = totalMemory - unusedMemory;
+	unusedMemory /= (double)1024 * 1024 * 1024;  // переводим в ГБ
+	usedMemory = totalMemory - unusedMemory;  // высчитываем занятую память на диске
 	std::cout << "\nMemory:\n - Total - " << totalMemory << " Gb\n"
 		<< " - Used - " << usedMemory << " Gb\n"
 		<< " - Free - " << unusedMemory << " Gb\n";
 }
 
-void printAtaSpecs(HANDLE diskHandle)
+void printAtaSpecs(HANDLE diskHandle) //  а тут какая-то запупа, я еще не разобрался XD
 {
 	DWORD vBufferSize = sizeof(ATA_PASS_THROUGH_EX) + sizeof(IDENTIFY_DEVICE_DATA);
 	BYTE* vBuffer = new BYTE[vBufferSize];
@@ -129,22 +129,22 @@ int main()
 {
 	for (int diskNumber = 0;; diskNumber++)
 	{
-		string diskName = string("\\\\.\\PhysicalDrive") + to_string(diskNumber);
+		string diskName = string("\\\\.\\PhysicalDrive") + to_string(diskNumber);               // имя диска
 
-		HANDLE diskHandle = CreateFileA(diskName.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+		HANDLE diskHandle = CreateFileA(diskName.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);            // handle диска
 		if (diskHandle == INVALID_HANDLE_VALUE)
 			break;
 
 		DWORD bytesReturned;
 
-		STORAGE_PROPERTY_QUERY storagePropertyQuery;
-		storagePropertyQuery.PropertyId = StorageDeviceProperty;
+		STORAGE_PROPERTY_QUERY storagePropertyQuery;                // структура, определяющая информацию, которую мы будем получать
+		storagePropertyQuery.PropertyId = StorageDeviceProperty;           // специальные флаги в ней
 		storagePropertyQuery.QueryType = PropertyStandardQuery;
-		STORAGE_DESCRIPTOR_HEADER  diskDescHeader;
-		DeviceIoControl(diskHandle, IOCTL_STORAGE_QUERY_PROPERTY, &storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY), &diskDescHeader, sizeof(STORAGE_DESCRIPTOR_HEADER), &bytesReturned, NULL);
-		BYTE* diskDescBuffer = new BYTE[diskDescHeader.Size];
-		DeviceIoControl(diskHandle, IOCTL_STORAGE_QUERY_PROPERTY, &storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY), diskDescBuffer, diskDescHeader.Size, &bytesReturned, NULL);
-		STORAGE_DEVICE_DESCRIPTOR* diskDesc = (STORAGE_DEVICE_DESCRIPTOR*)diskDescBuffer;
+		STORAGE_DESCRIPTOR_HEADER  diskDescHeader;             // структура для того чтобы запомнить объем информации
+		DeviceIoControl(diskHandle, IOCTL_STORAGE_QUERY_PROPERTY, &storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY), &diskDescHeader, sizeof(STORAGE_DESCRIPTOR_HEADER), &bytesReturned, NULL);   // первый раз вызываем функцию чтобы получить размер нужной инфы
+		BYTE* diskDescBuffer = new BYTE[diskDescHeader.Size]; // создаем буфер на этот размер
+		DeviceIoControl(diskHandle, IOCTL_STORAGE_QUERY_PROPERTY, &storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY), diskDescBuffer, diskDescHeader.Size, &bytesReturned, NULL); // в этот раз записываем в буфер инфу с нужным размером
+		STORAGE_DEVICE_DESCRIPTOR* diskDesc = (STORAGE_DEVICE_DESCRIPTOR*)diskDescBuffer; // приводим буфер к типу структуры и записываем
 
 
 
@@ -152,14 +152,14 @@ int main()
 		if (vendor.size() <= 1)
 			vendor = "Unknown";
 		std::cout << "Number: " << diskNumber << '\n'
-			<< "Vendor: " << vendor << '\n'
-			<< "Model: " << (char*)diskDesc + diskDesc->ProductIdOffset << '\n'
-			<< "Serial: " << (char*)diskDesc + diskDesc->SerialNumberOffset << '\n'
-			<< "Firmware version: " << (char*)diskDesc + diskDesc->ProductRevisionOffset << '\n'
+			<< "Vendor: " << vendor << '\n'                                                        //  Вывод
+			<< "Model: " << (char*)diskDesc + diskDesc->ProductIdOffset << '\n'                    //  информации
+			<< "Serial: " << (char*)diskDesc + diskDesc->SerialNumberOffset << '\n'                //  о
+			<< "Firmware version: " << (char*)diskDesc + diskDesc->ProductRevisionOffset << '\n'   //  диске
 			<< "Interface type: " << busTypes[diskDesc->BusType] << "\n";
-		printDiskSize(diskHandle, diskNumber);
+		printDiskSize(diskHandle, diskNumber);    // сведения о памяти
 		std::cout << '\n';
-		if (diskDesc->BusType == 3 || diskDesc->BusType == 11)
+		if (diskDesc->BusType == 3 || diskDesc->BusType == 11)  // список поддерживаемых режимов
 			printAtaSpecs(diskHandle);
 
 		std::cout << "\n\n";
